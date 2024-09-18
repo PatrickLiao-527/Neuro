@@ -1,6 +1,16 @@
 /** @type {import('next').NextConfig} */
+
 const nextConfig = {
-  // Add any other Next.js config options here
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+      };
+    }
+    return config;
+  },
 };
 
 export default nextConfig;

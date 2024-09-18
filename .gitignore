@@ -37,3 +37,6 @@ next-env.d.ts
 # Uploaded files
 public/assets/*
 !public/assets/.gitkeep
+# Converted files
+public/converted/*
+!public/converted/.gitkeep

@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Paperclip, Mic, CornerDownLeft, X } from "lucide-react";
-import { Input } from "@/components/ui/input";
 
 /**
  * Chat interface component for displaying messages and input
@@ -15,6 +14,7 @@ import { Input } from "@/components/ui/input";
 export function ChatInterface() {
   const [file, setFile] = useState<File | null>(null);
   const [message, setMessage] = useState('');
+  const [ocrOutput, setOcrOutput] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -30,19 +30,47 @@ export function ChatInterface() {
     formData.append('file', file);
 
     try {
-      const response = await fetch('/api/upload', {
+      // Upload PDF
+      const uploadResponse = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
       });
 
-      if (response.ok) {
-        console.log('File uploaded successfully');
-        setFile(null);
-      } else {
-        console.error('Failed to upload file');
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload file');
       }
+
+      const { filePath } = await uploadResponse.json();
+
+      // Convert PDF to images
+      const convertResponse = await fetch('/api/convert-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filePath }),
+      });
+
+      if (!convertResponse.ok) {
+        throw new Error('Failed to convert PDF to images');
+      }
+
+      const { imagePaths } = await convertResponse.json();
+
+      // Process OCR
+      const ocrResponse = await fetch('/api/ocr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imagePaths }),
+      });
+
+      if (!ocrResponse.ok) {
+        throw new Error('Failed to process OCR');
+      }
+
+      const { ocrResults } = await ocrResponse.json();
+      setOcrOutput(ocrResults.join('\n\n'));
+      setFile(null);
     } catch (error) {
-      console.error('Error uploading file:', error);
+      console.error('Error processing file:', error);
     }
   };
 
@@ -65,7 +93,9 @@ export function ChatInterface() {
       <Badge variant="outline" className="absolute right-3 top-3">
         Output
       </Badge>
-      <div className="flex-1" />
+      <div className="flex-1 whitespace-pre-wrap p-4 text-sm overflow-auto">
+        {ocrOutput}
+      </div>
       <form className="relative overflow-hidden rounded-lg border bg-background focus-within:ring-1 focus-within:ring-ring" onSubmit={(e) => e.preventDefault()}>
         <Label htmlFor="message" className="sr-only">
           Message
