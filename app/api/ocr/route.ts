@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { Client as GradioClient } from '@gradio/client';
+import fs from 'fs/promises';
 
 let Client: typeof GradioClient;
 
@@ -17,8 +18,14 @@ export async function POST(req: Request) {
     const results: string[] = [];
 
     for (const imagePath of imagePaths) {
+      // Read the file as a buffer
+      const imageBuffer = await fs.readFile(imagePath);
+      
+      // Convert buffer to Blob
+      const imageBlob = new Blob([imageBuffer]);
+
       const result = await client.predict("/ocr_demo", {
-        image: await fetch(imagePath).then(res => res.blob()),
+        image: imageBlob,
         task: "Plain Text OCR",
         ocr_type: "ocr",
         ocr_box: "",

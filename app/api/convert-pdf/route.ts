@@ -25,15 +25,15 @@ export async function POST(req: Request) {
 
     for (let i = 1; i <= pageCount; i++) {
       const result = await convert(i);
-      imagePaths.push(result.path!);
+      imagePaths.push(path.resolve(result.path!));
     }
 
     return NextResponse.json({ imagePaths }, { status: 200 });
   } catch (error) {
-    console.error("Error converting PDF to images:", error);
+    console.error("Error converting PDF:", error);
     return NextResponse.json({ 
-      error: "Conversion failed",
-      details: error instanceof Error ? error.message : String(error)
+      message: "Failed to convert PDF", 
+      error: error instanceof Error ? error.message : String(error) 
     }, { status: 500 });
   }
 }

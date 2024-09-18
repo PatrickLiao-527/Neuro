@@ -1,61 +1,64 @@
 "use client";
 
-import React, { useState, useRef } from 'react';
-import { Badge } from "@/components/ui/badge";
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Paperclip, Mic, CornerDownLeft, X } from "lucide-react";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
+import { FileType } from './FileInventory';
 
-/**
- * Chat interface component for displaying messages and input
- */
-export function ChatInterface() {
-  const [file, setFile] = useState<File | null>(null);
+export function ChatInterface({ selectedImage }: { selectedImage: FileType | null }) {
+  const [file, setFile] = useState<FileType | null>(null);
   const [message, setMessage] = useState('');
   const [ocrOutput, setOcrOutput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentProcess, setCurrentProcess] = useState<string | null>(null);
+  const [alertMessage, setAlertMessage] = useState<{ type: 'info' | 'error', message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (selectedImage) {
+      setFile(selectedImage);
+    }
+  }, [selectedImage]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setFile(e.target.files[0]);
+      setFile(e.target.files[0] as unknown as FileType);
     }
   };
 
   const handleUpload = async () => {
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append('file', file);
+    setIsLoading(true);
+    setAlertMessage(null);
 
     try {
-      // Upload PDF
-      const uploadResponse = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
+      setCurrentProcess("Processing File");
+      let imagePaths: string[];
 
-      if (!uploadResponse.ok) {
-        throw new Error('Failed to upload file');
+      if (file.type === 'pdf') {
+        // Convert PDF to images
+        const response = await fetch('/api/convert-pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filePath: file.path }),
+        });
+        if (!response.ok) throw new Error('Failed to convert PDF');
+        const data = await response.json();
+        imagePaths = data.imagePaths.map((path: string) => `public${path}`);
+      } else if (file.type === 'image') {
+        imagePaths = [`public${file.path}`];
+      } else {
+        throw new Error('Unsupported file type');
       }
-
-      const { filePath } = await uploadResponse.json();
-
-      // Convert PDF to images
-      const convertResponse = await fetch('/api/convert-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filePath }),
-      });
-
-      if (!convertResponse.ok) {
-        throw new Error('Failed to convert PDF to images');
-      }
-
-      const { imagePaths } = await convertResponse.json();
 
       // Process OCR
+      setCurrentProcess("Processing OCR");
       const ocrResponse = await fetch('/api/ocr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -69,8 +72,13 @@ export function ChatInterface() {
       const { ocrResults } = await ocrResponse.json();
       setOcrOutput(ocrResults.join('\n\n'));
       setFile(null);
+      setAlertMessage({ type: 'info', message: 'File processed successfully' });
     } catch (error) {
       console.error('Error processing file:', error);
+      setAlertMessage({ type: 'error', message: 'Error processing file' });
+    } finally {
+      setIsLoading(false);
+      setCurrentProcess(null);
     }
   };
 
@@ -90,12 +98,29 @@ export function ChatInterface() {
 
   return (
     <div className="relative flex h-full min-h-[50vh] flex-col rounded-xl p-4 lg:col-span-2">
-      <Badge variant="outline" className="absolute right-3 top-3">
-        Output
-      </Badge>
       <div className="flex-1 whitespace-pre-wrap p-4 text-sm overflow-auto">
-        {ocrOutput}
+        {isLoading ? (
+          <>
+            <Skeleton className="h-4 w-3/4 mb-2" />
+            <Skeleton className="h-4 w-1/2 mb-2" />
+            <Skeleton className="h-4 w-2/3" />
+          </>
+        ) : (
+          ocrOutput
+        )}
       </div>
+      {alertMessage && (
+        <Alert variant={alertMessage.type === 'error' ? 'destructive' : 'default'}>
+          <AlertTitle>{alertMessage.type === 'error' ? 'Error' : 'Info'}</AlertTitle>
+          <AlertDescription>{alertMessage.message}</AlertDescription>
+        </Alert>
+      )}
+      {currentProcess && (
+        <Alert>
+          <AlertTitle>Processing</AlertTitle>
+          <AlertDescription>{currentProcess}</AlertDescription>
+        </Alert>
+      )}
       <form className="relative overflow-hidden rounded-lg border bg-background focus-within:ring-1 focus-within:ring-ring" onSubmit={(e) => e.preventDefault()}>
         <Label htmlFor="message" className="sr-only">
           Message
